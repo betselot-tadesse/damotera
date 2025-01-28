@@ -3,25 +3,40 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 import plotly.express as px
+import requests
+from bs4 import BeautifulSoup
 
-# Load data (replace this with your dataset or scraping logic)
+# Function to fetch player data from fbref.com
 @st.cache
-def load_data():
-    # Example dataset (replace with actual data from fbref.com)
-    data = {
-        "Player": ["Mohamed Salah", "Kevin De Bruyne", "Virgil van Dijk", "Harry Kane"],
-        "Goals": [22, 10, 2, 20],
-        "Assists": [12, 15, 1, 10],
-        "Shots": [110, 80, 10, 120],
-        "xG": [18.5, 8.2, 1.5, 19.0],
-        "Tackles": [15, 20, 50, 10],
-        "Interceptions": [10, 12, 40, 8],
-        "Clearances": [5, 8, 100, 6],
-        "Passes Completed": [800, 1200, 700, 900],
-        "Key Passes": [60, 90, 10, 50],
-        "Pass Accuracy": [85, 89, 92, 88]
-    }
-    return pd.DataFrame(data)
+def fetch_player_data(player_name):
+    # URL for fbref.com search
+    search_url = f"https://fbref.com/en/search/search.fcgi?search={player_name}"
+    response = requests.get(search_url)
+    soup = BeautifulSoup(response.text, "html.parser")
+
+    # Find the first player link in the search results
+    player_link = soup.find("div", {"class": "search-item-name"}).find("a")["href"]
+    player_url = f"https://fbref.com{player_link}"
+
+    # Fetch player stats page
+    player_response = requests.get(player_url)
+    player_soup = BeautifulSoup(player_response.text, "html.parser")
+
+    # Extract stats (example: goals, assists, etc.)
+    stats_table = player_soup.find("table", {"id": "scout_summary"})
+    if not stats_table:
+        return None
+
+    stats = {}
+    rows = stats_table.find_all("tr")
+    for row in rows:
+        cols = row.find_all(["th", "td"])
+        if len(cols) == 2:
+            stat_name = cols[0].text.strip()
+            stat_value = cols[1].text.strip()
+            stats[stat_name] = stat_value
+
+    return stats
 
 # Pizza chart function
 def create_pizza_chart(stats, labels, title):
@@ -54,54 +69,58 @@ def main():
     st.title("Football Player Comparison Tool ⚽")
     st.write("Compare football players using pizza charts, radar charts, and a comparison table.")
 
-    # Load data
-    data = load_data()
+    # Player search
+    st.sidebar.header("Player Search")
+    player1_name = st.sidebar.text_input("Search Player 1")
+    player2_name = st.sidebar.text_input("Search Player 2")
 
-    # Player selection
-    st.sidebar.header("Player Selection")
-    player1 = st.sidebar.selectbox("Select Player 1", data['Player'].unique())
-    player2 = st.sidebar.selectbox("Select Player 2", data['Player'].unique())
+    # Fetch player data
+    player1_data = fetch_player_data(player1_name) if player1_name else None
+    player2_data = fetch_player_data(player2_name) if player2_name else None
 
-    # Metric selection
-    st.sidebar.header("Metric Selection")
-    metric_categories = {
-        "Attacking": ["Goals", "Assists", "Shots", "xG"],
-        "Defending": ["Tackles", "Interceptions", "Clearances"],
-        "Passing": ["Passes Completed", "Key Passes", "Pass Accuracy"]
-    }
-    selected_category = st.sidebar.selectbox("Select Metric Category", list(metric_categories.keys()))
-    selected_metrics = st.sidebar.multiselect("Select Metrics", metric_categories[selected_category])
+    if player1_data and player2_data:
+        # Metric selection
+        st.sidebar.header("Metric Selection")
+        metric_categories = {
+            "Attacking": ["Goals", "Assists", "Shots", "xG"],
+            "Defending": ["Tackles", "Interceptions", "Clearances"],
+            "Passing": ["Passes Completed", "Key Passes", "Pass Accuracy"]
+        }
+        selected_category = st.sidebar.selectbox("Select Metric Category", list(metric_categories.keys()))
+        selected_metrics = st.sidebar.multiselect("Select Metrics", metric_categories[selected_category])
 
-    if player1 and player2 and selected_metrics:
-        # Filter data for selected players and metrics
-        player1_data = data[data['Player'] == player1][selected_metrics].iloc[0].tolist()
-        player2_data = data[data['Player'] == player2][selected_metrics].iloc[0].tolist()
+        if selected_metrics:
+            # Extract selected metrics for both players
+            player1_stats = [float(player1_data.get(metric, 0)) for metric in selected_metrics]
+            player2_stats = [float(player2_data.get(metric, 0)) for metric in selected_metrics]
 
-        # Normalize data for pizza chart
-        max_values = [max(player1_data[i], player2_data[i]) for i in range(len(selected_metrics))]
-        player1_normalized = [player1_data[i] / max_values[i] * 100 for i in range(len(selected_metrics))]
-        player2_normalized = [player2_data[i] / max_values[i] * 100 for i in range(len(selected_metrics))]
+            # Normalize data for pizza chart
+            max_values = [max(player1_stats[i], player2_stats[i]) for i in range(len(selected_metrics))]
+            player1_normalized = [player1_stats[i] / max_values[i] * 100 for i in range(len(selected_metrics))]
+            player2_normalized = [player2_stats[i] / max_values[i] * 100 for i in range(len(selected_metrics))]
 
-        # Display pizza charts
-        st.write(f"### {player1} vs {player2}")
-        col1, col2 = st.columns(2)
-        with col1:
-            create_pizza_chart(player1_normalized, selected_metrics, player1)
-        with col2:
-            create_pizza_chart(player2_normalized, selected_metrics, player2)
+            # Display pizza charts
+            st.write(f"### {player1_name} vs {player2_name}")
+            col1, col2 = st.columns(2)
+            with col1:
+                create_pizza_chart(player1_normalized, selected_metrics, player1_name)
+            with col2:
+                create_pizza_chart(player2_normalized, selected_metrics, player2_name)
 
-        # Display radar chart
-        st.write("### Radar Chart Comparison")
-        create_radar_chart(player1_data, player2_data, selected_metrics, [player1, player2])
+            # Display radar chart
+            st.write("### Radar Chart Comparison")
+            create_radar_chart(player1_stats, player2_stats, selected_metrics, [player1_name, player2_name])
 
-        # Display comparison table
-        st.write("### Comparison Table")
-        comparison_df = pd.DataFrame({
-            "Metric": selected_metrics,
-            player1: player1_data,
-            player2: player2_data
-        })
-        st.table(comparison_df)
+            # Display comparison table
+            st.write("### Comparison Table")
+            comparison_df = pd.DataFrame({
+                "Metric": selected_metrics,
+                player1_name: player1_stats,
+                player2_name: player2_stats
+            })
+            st.table(comparison_df)
+    else:
+        st.warning("Please enter valid player names and ensure they exist on fbref.com.")
 
 # Run the app
 if __name__ == "__main__":
