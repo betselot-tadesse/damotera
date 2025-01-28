@@ -6,6 +6,14 @@ import plotly.express as px
 import requests
 from bs4 import BeautifulSoup
 
+# Simulated list of player names (this would ideally come from a dynamic source like fbref or an API)
+player_names_list = [
+    "Lionel Messi", "Cristiano Ronaldo", "Alisson Becker", "Mohamed Salah", "Kevin De Bruyne", 
+    "Virgil van Dijk", "Harry Kane", "Neymar", "Kylian Mbappé", "Robert Lewandowski", "Sadio Mane",
+    "Paul Pogba", "Raheem Sterling", "Son Heung-min", "Gareth Bale", "Jack Grealish", "Luka Modrić",
+    "Sergio Ramos", "Eden Hazard", "Romelu Lukaku", "Pierre-Emerick Aubameyang", "Erling Haaland"
+]
+
 # Function to fetch player data from fbref.com
 @st.cache
 def fetch_player_data(player_name):
@@ -16,12 +24,16 @@ def fetch_player_data(player_name):
         response.raise_for_status()  # Ensure we catch HTTP errors
 
         soup = BeautifulSoup(response.text, "html.parser")
+        
+        # Debug: Print the raw HTML to understand the structure
+        # st.text(soup.prettify())  # Uncomment to see the HTML structure
 
         # Find the first player link in the search results
         search_item = soup.find("div", {"class": "search-item-name"})
         if not search_item:
+            st.warning(f"Player '{player_name}' not found on fbref.com.")
             return None, None  # Return None for both data and image if player not found
-
+        
         player_link = search_item.find("a")["href"]
         player_url = f"https://fbref.com{player_link}"
 
@@ -33,6 +45,7 @@ def fetch_player_data(player_name):
         # Extract stats
         stats_table = player_soup.find("table", {"id": "scout_summary"})
         if not stats_table:
+            st.warning(f"No stats found for player '{player_name}'.")
             return None, None  # Return None for both data and image if stats table not found
 
         stats = {}
@@ -89,10 +102,20 @@ def main():
     st.title("Football Player Comparison Tool ⚽")
     st.write("Compare football players using pizza charts, radar charts, and a comparison table.")
 
-    # Player search
+    # Player search with autocomplete feature
     st.sidebar.header("Player Search")
-    player1_name = st.sidebar.text_input("Search Player 1")
-    player2_name = st.sidebar.text_input("Search Player 2")
+    
+    # Real-time suggestion for players' names
+    player1_name_input = st.sidebar.text_input("Search Player 1")
+    player2_name_input = st.sidebar.text_input("Search Player 2")
+    
+    # Filter the player names based on input
+    filtered_player_names1 = [name for name in player_names_list if name.lower().startswith(player1_name_input.lower())]
+    filtered_player_names2 = [name for name in player_names_list if name.lower().startswith(player2_name_input.lower())]
+    
+    # Provide suggestions based on input
+    player1_name = st.sidebar.selectbox("Select Player 1", filtered_player_names1) if filtered_player_names1 else None
+    player2_name = st.sidebar.selectbox("Select Player 2", filtered_player_names2) if filtered_player_names2 else None
 
     # Fetch player data
     player1_data, player1_image = fetch_player_data(player1_name) if player1_name else (None, None)
