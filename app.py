@@ -20,7 +20,7 @@ def fetch_player_data(player_name):
         # Find the first player link in the search results
         search_item = soup.find("div", {"class": "search-item-name"})
         if not search_item:
-            return None
+            return None, None  # Return None for both data and image if player not found
 
         player_link = search_item.find("a")["href"]
         player_url = f"https://fbref.com{player_link}"
@@ -33,7 +33,7 @@ def fetch_player_data(player_name):
         # Extract stats
         stats_table = player_soup.find("table", {"id": "scout_summary"})
         if not stats_table:
-            return None
+            return None, None  # Return None for both data and image if stats table not found
 
         stats = {}
         rows = stats_table.find_all("tr")
@@ -51,8 +51,8 @@ def fetch_player_data(player_name):
         return stats, player_image
 
     except requests.exceptions.RequestException as e:
-        st.error(f"Error fetching data: {e}")
-        return None, None
+        st.error(f"Error fetching data for {player_name}: {e}")
+        return None, None  # Return None for both data and image on error
 
 
 # Pizza chart function
@@ -124,9 +124,13 @@ def main():
             with col1:
                 if player1_image:
                     st.image(player1_image, caption=player1_name, width=150)
+                else:
+                    st.warning(f"No image found for {player1_name}.")
             with col2:
                 if player2_image:
                     st.image(player2_image, caption=player2_name, width=150)
+                else:
+                    st.warning(f"No image found for {player2_name}.")
 
             # Display pizza charts
             st.write(f"### {player1_name} vs {player2_name}")
