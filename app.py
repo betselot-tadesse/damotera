@@ -1,7 +1,5 @@
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
-import numpy as np
 import plotly.express as px
 
 # Load data (replace this with your dataset or scraping logic)
@@ -23,22 +21,6 @@ def load_data():
     }
     return pd.DataFrame(data)
 
-# Pizza chart function
-def create_pizza_chart(stats, labels, title):
-    num_stats = len(stats)
-    angles = np.linspace(0, 2 * np.pi, num_stats, endpoint=False).tolist()
-    stats += stats[:1]  # Close the circle
-    angles += angles[:1]
-
-    fig, ax = plt.subplots(figsize=(6, 6), subplot_kw=dict(polar=True))
-    ax.fill(angles, stats, color='red', alpha=0.25)
-    ax.plot(angles, stats, color='red', linewidth=2)
-    ax.set_yticklabels([])
-    ax.set_xticks(angles[:-1])
-    ax.set_xticklabels(labels)
-    ax.set_title(title, size=14, y=1.1)
-    st.pyplot(fig)
-
 # Radar chart function
 def create_radar_chart(player1_data, player2_data, selected_metrics, players):
     df = pd.DataFrame({
@@ -52,7 +34,7 @@ def create_radar_chart(player1_data, player2_data, selected_metrics, players):
 # Streamlit app
 def main():
     st.title("Football Player Comparison Tool ⚽")
-    st.write("Compare football players using pizza charts, radar charts, and a comparison table.")
+    st.write("Compare football players using radar charts and a comparison table.")
 
     # Load data
     data = load_data()
@@ -77,21 +59,8 @@ def main():
         player1_data = data[data['Player'] == player1][selected_metrics].iloc[0].tolist()
         player2_data = data[data['Player'] == player2][selected_metrics].iloc[0].tolist()
 
-        # Normalize data for pizza chart
-        max_values = [max(player1_data[i], player2_data[i]) for i in range(len(selected_metrics))]
-        player1_normalized = [player1_data[i] / max_values[i] * 100 for i in range(len(selected_metrics))]
-        player2_normalized = [player2_data[i] / max_values[i] * 100 for i in range(len(selected_metrics))]
-
-        # Display pizza charts
-        st.write(f"### {player1} vs {player2}")
-        col1, col2 = st.columns(2)
-        with col1:
-            create_pizza_chart(player1_normalized, selected_metrics, player1)
-        with col2:
-            create_pizza_chart(player2_normalized, selected_metrics, player2)
-
         # Display radar chart
-        st.write("### Radar Chart Comparison")
+        st.write(f"### {player1} vs {player2}")
         create_radar_chart(player1_data, player2_data, selected_metrics, [player1, player2])
 
         # Display comparison table
