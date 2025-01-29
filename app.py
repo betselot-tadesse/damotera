@@ -1,44 +1,38 @@
 import streamlit as st
-import pandas as pd
 import requests
+from bs4 import BeautifulSoup
+import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import plotly.express as px
 
-# Enable caching to avoid repeated API calls
-@st.cache_data
-def fetch_all_players(api_key):
-    url = "https://api.football-data.org/v4/players"
-    headers = {"X-Auth-Token": api_key}
-    response = requests.get(url, headers=headers)
+# Web scraping function to fetch player stats
+def scrape_player_stats(player_url):
+    # Send a request to the player URL
+    response = requests.get(player_url)
+    if response.status_code != 200:
+        st.error("Failed to fetch player data")
+        return None
     
-    # Debugging: Check the raw response from API
-    if response.status_code == 200:
-        players = response.json()
-        # Print the structure for debugging
-        st.write(players)  # Debugging output: Print response structure
+    soup = BeautifulSoup(response.content, 'html.parser')
+    
+    # Scrape player data (stats)
+    player_data = {}
+    
+    # Example: Scraping stats from the 'Standard Stats' table (adjust based on actual table)
+    stats_table = soup.find('table', {'class': 'stats_table'})
+    if stats_table:
+        headers = [th.get_text() for th in stats_table.find_all('th')]
+        rows = stats_table.find_all('tr')[1:]  # Skip header row
         
-        if 'players' in players:  # Assuming the response contains a 'players' key
-            player_names = [player['name'] for player in players['players']]  # Adjust based on the response structure
-            player_ids = [player['id'] for player in players['players']]  # Adjust based on the response structure
-            return player_names, player_ids
-        else:
-            st.error("No 'players' key found in the response.")
-            return [], []
-    else:
-        st.error("Failed to fetch players")
-        return [], []
+        for row in rows:
+            cols = row.find_all('td')
+            if len(cols) > 1:
+                stat_name = cols[0].get_text()
+                stat_value = cols[1].get_text()  # This can vary based on table structure
+                player_data[stat_name] = stat_value
 
-@st.cache_data
-def fetch_player_data(player_id, api_key):
-    url = f"https://api.football-data.org/v4/players/{player_id}"
-    headers = {"X-Auth-Token": api_key}
-    response = requests.get(url, headers=headers)
-    if response.status_code == 200:
-        return response.json()
-    else:
-        st.error(f"Failed to fetch data for player {player_id}")
-        return {}
+    return player_data
 
 # Pizza chart function
 def create_pizza_chart(stats, labels, title):
@@ -71,26 +65,21 @@ def main():
     st.title("Football Player Comparison Tool ⚽")
     st.write("Compare football players using pizza charts, radar charts, and a comparison table.")
 
-    # API key input
-    api_key = st.sidebar.text_input("Enter API Key", type="password")
+    # Player selection
+    st.sidebar.header("Player Selection")
+    player1_name = st.sidebar.text_input("Enter Player 1 Name")
+    player2_name = st.sidebar.text_input("Enter Player 2 Name")
 
-    if api_key:
-        # Fetch all player names for autocomplete suggestions
-        all_player_names, player_ids = fetch_all_players(api_key)
+    # URL for scraping player stats (Example URL for fbref.com)
+    base_url = 'https://fbref.com/en/players/'
+    player1_url = base_url + player1_name.replace(" ", "-")
+    player2_url = base_url + player2_name.replace(" ", "-")
 
-        # Player selection
-        st.sidebar.header("Player Selection")
-        player1_name = st.sidebar.selectbox("Select Player 1", all_player_names)
-        player2_name = st.sidebar.selectbox("Select Player 2", all_player_names)
+    # Scrape player data
+    player1_data = scrape_player_stats(player1_url)
+    player2_data = scrape_player_stats(player2_url)
 
-        # Find the player ids from the player names
-        player1_id = player_ids[all_player_names.index(player1_name)]
-        player2_id = player_ids[all_player_names.index(player2_name)]
-
-        # Fetch player data
-        player1_data = fetch_player_data(player1_id, api_key)
-        player2_data = fetch_player_data(player2_id, api_key)
-
+    if player1_data and player2_data:
         # Metric selection
         st.sidebar.header("Metric Selection")
         metric_categories = {
@@ -101,10 +90,10 @@ def main():
         selected_category = st.sidebar.selectbox("Select Metric Category", list(metric_categories.keys()))
         selected_metrics = st.sidebar.multiselect("Select Metrics", metric_categories[selected_category])
 
-        if player1_data and player2_data and selected_metrics:
+        if selected_metrics:
             # Extract stats for the selected metrics
-            player1_stats = [player1_data.get(metric.lower(), 0) for metric in selected_metrics]
-            player2_stats = [player2_data.get(metric.lower(), 0) for metric in selected_metrics]
+            player1_stats = [float(player1_data.get(metric, 0)) for metric in selected_metrics]
+            player2_stats = [float(player2_data.get(metric, 0)) for metric in selected_metrics]
 
             # Normalize data for pizza chart
             max_values = [max(player1_stats[i], player2_stats[i]) for i in range(len(selected_metrics))]
@@ -133,7 +122,7 @@ def main():
             st.table(comparison_df)
 
     else:
-        st.warning("Please enter a valid API key.")
+        st.warning("Failed to fetch data for one or both players. Please ensure the player names are correct.")
 
 # Run the app
 if __name__ == "__main__":
