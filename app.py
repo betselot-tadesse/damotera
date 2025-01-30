@@ -21,7 +21,8 @@ def fetch_player_links():
     for link in soup.find_all("a", href=True):
         href = link["href"]
         if "/en/players/" in href and href.count("/") == 4:  # Ensure it's a player profile link
-            player_links.append(f"https://fbref.com{href}")
+            full_link = f"https://fbref.com{href}"
+            player_links.append(full_link)
 
     return player_links
 
